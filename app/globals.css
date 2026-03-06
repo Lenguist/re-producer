@@ -1,37 +1,56 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0f0f0f;
+  --bg-surface: #161616;
+  --bg-border: #262626;
+  --fg: #e2e8f0;
+  --fg-muted: #64748b;
+  --fg-dim: #334155;
+  --accent: #a78bfa;
+
+  --grade-a-bg: #052e16; --grade-a-text: #4ade80; --grade-a-border: #166534;
+  --grade-b-bg: #0c1a3a; --grade-b-text: #60a5fa; --grade-b-border: #1e40af;
+  --grade-c-bg: #2d1f00; --grade-c-text: #fbbf24; --grade-c-border: #92400e;
+  --grade-d-bg: #2d1200; --grade-d-text: #fb923c; --grade-d-border: #9a3412;
+  --grade-f-bg: #2d0a0a; --grade-f-text: #f87171; --grade-f-border: #991b1b;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+* { box-sizing: border-box; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
-    Segoe UI, Roboto, Helvetica, Arial;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system;
+  -webkit-font-smoothing: antialiased;
+}
+
+.surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
 }
 
 .btn-primary {
-  @apply rounded-lg bg-violet-600 px-4 py-2 text-white font-medium transition hover:bg-violet-700 disabled:opacity-50;
+  @apply rounded-md px-4 py-2 text-sm font-medium transition;
+  background: var(--accent);
+  color: #0f0f0f;
 }
+.btn-primary:hover { filter: brightness(1.1); }
 
-.grade-A { @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300; }
-.grade-B { @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300; }
-.grade-C { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300; }
-.grade-D { @apply bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300; }
-.grade-F { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300; }
+/* Grade blocks */
+.grade-A { background: var(--grade-a-bg); color: var(--grade-a-text); border-color: var(--grade-a-border); }
+.grade-B { background: var(--grade-b-bg); color: var(--grade-b-text); border-color: var(--grade-b-border); }
+.grade-C { background: var(--grade-c-bg); color: var(--grade-c-text); border-color: var(--grade-c-border); }
+.grade-D { background: var(--grade-d-bg); color: var(--grade-d-text); border-color: var(--grade-d-border); }
+.grade-F { background: var(--grade-f-bg); color: var(--grade-f-text); border-color: var(--grade-f-border); }
+
+/* Terminal-style pip bar */
+.pip-filled { background: var(--accent); }
+.pip-empty  { background: var(--bg-border); }

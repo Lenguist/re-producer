@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 
 function normalizeArxivId(input: string): string | null {
   input = input.trim();
-  // Full URL: arxiv.org/abs/2301.12345 or arxiv.org/pdf/2301.12345
   const urlMatch = input.match(/arxiv\.org\/(?:abs|pdf)\/([0-9]{4}\.[0-9]{4,5}(?:v\d+)?)/i);
   if (urlMatch) return urlMatch[1].replace(/v\d+$/, "");
-  // Bare ID: 2301.12345 or 2301.12345v2
   const bareMatch = input.match(/^([0-9]{4}\.[0-9]{4,5})(?:v\d+)?$/);
   if (bareMatch) return bareMatch[1];
   return null;
@@ -23,51 +21,72 @@ export default function Home() {
     e.preventDefault();
     const id = normalizeArxivId(input);
     if (!id) {
-      setError("Enter an arXiv ID (e.g. 2301.12345) or URL");
+      setError("expected: arxiv id or url (e.g. 2301.12345)");
       return;
     }
     router.push(`/paper/${id}`);
   }
 
   return (
-    <div className="flex flex-col items-center gap-10 pt-16">
-      <div className="text-center space-y-3">
+    <div className="flex flex-col items-center gap-12 pt-20">
+
+      {/* Hero */}
+      <div className="text-center space-y-4">
+        <div className="font-mono text-xs mb-6" style={{ color: "var(--fg-muted)" }}>
+          <span style={{ color: "var(--accent)" }}>$</span> repro --check &lt;arxiv_id&gt;
+        </div>
         <h1 className="text-4xl font-bold tracking-tight">
           How reproducible is this paper?
         </h1>
-        <p className="text-gray-500 dark:text-gray-400 text-lg max-w-lg">
-          Paste an arXiv link or ID. We score it on code availability, data
-          openness, documentation, and compute requirements — instantly.
+        <p className="text-base max-w-md mx-auto" style={{ color: "var(--fg-muted)" }}>
+          Paste an arXiv ID or link. Get a grade — code, data, docs, compute — in seconds.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="w-full max-w-xl space-y-3">
-        <div className="flex gap-2">
+      {/* Input */}
+      <form onSubmit={handleSubmit} className="w-full max-w-xl space-y-2">
+        <div className="flex items-center gap-0 rounded-lg overflow-hidden"
+          style={{ border: "1px solid var(--bg-border)", background: "var(--bg-surface)" }}>
+          <span className="font-mono text-sm px-3" style={{ color: "var(--accent)" }}>$</span>
           <input
             type="text"
             value={input}
             onChange={(e) => { setInput(e.target.value); setError(""); }}
-            placeholder="arxiv.org/abs/2301.12345 or 2301.12345"
-            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+            placeholder="2301.12345 or arxiv.org/abs/2301.12345"
+            className="flex-1 bg-transparent py-3 pr-3 text-sm font-mono outline-none placeholder:opacity-30"
+            style={{ color: "var(--fg)" }}
             autoFocus
           />
-          <button type="submit" className="btn-primary">
-            Score it
+          <button type="submit" className="btn-primary rounded-none rounded-r-lg mr-0 font-mono text-sm px-5 py-3">
+            run
           </button>
         </div>
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && (
+          <p className="font-mono text-xs" style={{ color: "var(--grade-f-text)" }}>
+            <span style={{ color: "var(--fg-muted)" }}>error:</span> {error}
+          </p>
+        )}
       </form>
 
-      <div className="w-full max-w-xl border-t border-gray-100 dark:border-gray-800 pt-8 space-y-2">
-        <p className="text-xs text-gray-400 uppercase tracking-wider font-medium">Try an example</p>
+      {/* Examples */}
+      <div className="w-full max-w-xl space-y-3">
+        <p className="font-mono text-xs" style={{ color: "var(--fg-dim)" }}>// example papers</p>
         <div className="flex flex-wrap gap-2">
           {EXAMPLES.map((ex) => (
             <button
               key={ex.id}
               onClick={() => router.push(`/paper/${ex.id}`)}
-              className="text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 hover:border-violet-400 hover:text-violet-600 transition"
+              className="font-mono text-xs px-3 py-1.5 rounded transition"
+              style={{
+                border: "1px solid var(--bg-border)",
+                color: "var(--fg-muted)",
+                background: "var(--bg-surface)",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--bg-border)")}
             >
-              {ex.label}
+              {ex.id}
+              <span className="ml-2 opacity-50">{ex.label}</span>
             </button>
           ))}
         </div>
@@ -77,7 +96,7 @@ export default function Home() {
 }
 
 const EXAMPLES = [
-  { id: "2303.08774", label: "GPT-4 Technical Report" },
+  { id: "2303.08774", label: "GPT-4" },
   { id: "2005.14165", label: "GPT-3" },
   { id: "1706.03762", label: "Attention Is All You Need" },
   { id: "2302.13971", label: "LLaMA" },

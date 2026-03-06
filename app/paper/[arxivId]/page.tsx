@@ -1,99 +1,158 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import ReproScoreCard from "@/components/ReproScoreCard";
+import { fetchArxivPaper } from "@/lib/arxiv";
+import { fetchPwcEntry } from "@/lib/pwc";
+import { scoreReproducibility } from "@/lib/scorer";
+import { supabaseAdmin } from "@/lib/supabase";
 
 interface Props {
   params: Promise<{ arxivId: string }>;
 }
 
-async function getPaper(arxivId: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/paper?arxivId=${encodeURIComponent(arxivId)}`, {
-    next: { revalidate: 3600 },
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
+async function getPaperAndScore(arxivId: string) {
+  const db = supabaseAdmin();
 
-async function getScore(arxivId: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/score?arxivId=${encodeURIComponent(arxivId)}`, {
-    // No cache — scoring may update; but ISR would be fine too
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  return res.json();
+  // Check if paper + score already cached
+  const { data: cached } = await db
+    .from("repro_scores")
+    .select("*, papers!inner(id, arxiv_id, title, abstract, authors, published_date, primary_field)")
+    .eq("papers.arxiv_id", arxivId)
+    .maybeSingle();
+
+  if (cached) {
+    const { papers, ...score } = cached as typeof cached & { papers: Record<string, unknown> };
+    return { paper: papers, score };
+  }
+
+  // Fetch from arXiv + PWC in parallel
+  const [arxivPaper, pwc] = await Promise.all([
+    fetchArxivPaper(arxivId),
+    fetchPwcEntry(arxivId),
+  ]);
+
+  if (!arxivPaper) return null;
+
+  const score = scoreReproducibility(arxivPaper, pwc);
+
+  // Find or create paper row
+  let { data: paperRow } = await db
+    .from("papers")
+    .select("id, arxiv_id, title, abstract, authors, published_date, primary_field")
+    .eq("arxiv_id", arxivId)
+    .maybeSingle();
+
+  if (!paperRow) {
+    const { data: inserted } = await db
+      .from("papers")
+      .insert({
+        arxiv_id: arxivId,
+        title: arxivPaper.title,
+        abstract: arxivPaper.abstract,
+        authors: arxivPaper.authors.map((name) => ({ name })),
+        published_date: arxivPaper.published || null,
+        primary_field: arxivPaper.categories[0] ?? null,
+        url_abs: `https://arxiv.org/abs/${arxivId}`,
+        url_pdf: `https://arxiv.org/pdf/${arxivId}`,
+      })
+      .select("id, arxiv_id, title, abstract, authors, published_date, primary_field")
+      .single();
+
+    if (!inserted) {
+      // Race condition — try fetching again
+      const { data: retry } = await db
+        .from("papers")
+        .select("id, arxiv_id, title, abstract, authors, published_date, primary_field")
+        .eq("arxiv_id", arxivId)
+        .maybeSingle();
+      paperRow = retry;
+    } else {
+      paperRow = inserted;
+    }
+  }
+
+  if (!paperRow) return { paper: { arxiv_id: arxivId, ...arxivPaper }, score };
+
+  // Cache the score
+  await db.from("repro_scores").upsert(
+    {
+      paper_id: paperRow.id,
+      code_score: score.code_score,
+      data_score: score.data_score,
+      docs_score: score.docs_score,
+      compute_estimate: score.compute_estimate,
+      grade: score.grade,
+      summary: score.summary,
+      github_url: score.github_url,
+      pwc_url: score.pwc_url,
+      is_official_code: score.is_official_code,
+      pwc_stars: score.pwc_stars,
+      has_pwc_results: score.has_pwc_results,
+      scored_at: score.scored_at,
+      score_version: 1,
+    },
+    { onConflict: "paper_id" }
+  );
+
+  return { paper: paperRow, score };
 }
 
 export default async function PaperPage({ params }: Props) {
   const { arxivId } = await params;
+  const result = await getPaperAndScore(arxivId);
 
-  const [paper, score] = await Promise.all([
-    getPaper(arxivId),
-    getScore(arxivId),
-  ]);
+  if (!result) notFound();
 
-  if (!paper) notFound();
-
-  const authors: { name: string }[] = paper.authors ?? [];
+  const { paper, score } = result;
+  const authors: { name: string }[] = (paper.authors as { name: string }[]) ?? [];
   const authorStr = authors.length > 3
-    ? authors.slice(0, 3).map((a) => a.name).join(", ") + ` et al.`
+    ? authors.slice(0, 3).map((a) => a.name).join(", ") + " et al."
     : authors.map((a) => a.name).join(", ");
-
-  const year = paper.published_date?.slice(0, 4);
+  const year = (paper.published_date as string)?.slice(0, 4);
 
   return (
-    <div className="space-y-8">
-      {/* Back */}
-      <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">
-        ← back
-      </Link>
+    <div className="space-y-8 font-mono">
+
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--fg-muted)" }}>
+        <Link href="/" className="hover:opacity-100 opacity-60 transition">~/re:producer</Link>
+        <span style={{ color: "var(--fg-dim)" }}>/</span>
+        <span style={{ color: "var(--fg-dim)" }}>{arxivId}</span>
+      </div>
 
       {/* Paper header */}
       <div className="space-y-2">
-        {paper.primary_field && (
-          <span className="inline-block text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full">
-            {paper.primary_field}
+        {(paper.primary_field as string) && (
+          <span className="inline-block text-xs px-2 py-0.5 rounded"
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--bg-border)", color: "var(--fg-muted)" }}>
+            {paper.primary_field as string}
           </span>
         )}
-        <h1 className="text-2xl font-bold leading-snug">{paper.title}</h1>
-        <p className="text-sm text-gray-500">
-          {authorStr}
-          {year && ` · ${year}`}
+        <h1 className="text-xl font-bold leading-snug font-sans">{paper.title as string}</h1>
+        <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+          {authorStr}{year && ` · ${year}`}
         </p>
-        <div className="flex gap-3 text-xs">
-          <a
-            href={`https://arxiv.org/abs/${arxivId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-violet-600 hover:underline"
-          >
+        <div className="flex gap-4 text-xs">
+          <a href={`https://arxiv.org/abs/${arxivId}`} target="_blank" rel="noopener noreferrer"
+            style={{ color: "var(--accent)" }} className="hover:underline">
             arXiv:{arxivId}
           </a>
-          <a
-            href={`https://arxiv.org/pdf/${arxivId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-400 hover:text-gray-600"
-          >
-            PDF
+          <a href={`https://arxiv.org/pdf/${arxivId}`} target="_blank" rel="noopener noreferrer"
+            style={{ color: "var(--fg-muted)" }} className="hover:opacity-100 opacity-60 transition">
+            [pdf]
           </a>
         </div>
       </div>
 
-      {/* Score card */}
-      {score ? (
-        <ReproScoreCard {...score} />
-      ) : (
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 px-6 py-8 text-center text-gray-400">
-          Could not compute score. Try refreshing.
-        </div>
-      )}
+      {/* Score */}
+      <ReproScoreCard {...score} />
 
       {/* Abstract */}
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Abstract</h2>
-        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{paper.abstract}</p>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "var(--fg-dim)" }}>// abstract</div>
+        <p className="text-sm font-sans leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+          {paper.abstract as string}
+        </p>
       </div>
     </div>
   );

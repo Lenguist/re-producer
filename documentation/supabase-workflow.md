@@ -268,6 +268,25 @@ psql "$SUPABASE_PROD_DB_POOLER_URL"  -c '\dt'
 - `documentation/retros/supabase-issues-2025-11-21.md` - Previous migration issues and fixes
 - `documentation/retros/supabase-migration-mismatch-2025-12-01.md` - CLI matching issues and prevention
 
+### Shared database with paperfan — DO NOT use `supabase migration up` here
+
+re:producer shares the same Supabase DEV project as paperfan (`/Users/mbondarenko/Desktop/paperfan`). It reads paperfan's `papers` table and adds its own tables (`repro_scores`, `repro_runs`).
+
+**Do NOT use `supabase migration up` from this directory.** The CLI sees all of paperfan's remote migrations as missing locally and refuses to run. Running `migration repair` to fix it would corrupt the shared ledger and break paperfan.
+
+**Instead, apply migrations directly with psql:**
+```bash
+# Apply a new migration
+psql "$SUPABASE_DEV_DB_POOLER_URL" -f supabase/migrations/TIMESTAMP_description.sql
+
+# Verify the tables exist
+psql "$SUPABASE_DEV_DB_POOLER_URL" -c "\dt repro_*"
+```
+
+Still follow the 14-digit timestamp naming convention (`date +"%Y%m%d%H%M%S"`) and keep files in `supabase/migrations/`. They're just applied manually instead of via CLI.
+
+**If you ever want CLI-managed migrations:** copy all paperfan migration files into this repo's `supabase/migrations/`. The CLI will then see matching local+remote history and work normally. Keep both repos in sync going forward when paperfan adds migrations.
+
 ### Troubleshooting: Pooler Connection Limits
 
 If you encounter connection timeouts or "failed to connect" errors when using the pooler URL (especially with `supabase migration list` or `supabase db pull`), you may have hit Supabase's connection rate limits and your IP has been temporarily banned.

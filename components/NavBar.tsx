@@ -2,12 +2,17 @@ import Link from "next/link";
 
 export default function NavBar() {
   return (
-    <nav className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
-      <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="font-semibold text-lg tracking-tight">
-          re:producer
+    <nav style={{ borderBottom: "1px solid var(--bg-border)", background: "var(--bg)" }}>
+      <div className="mx-auto max-w-3xl px-4 h-12 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <span style={{ color: "var(--fg-muted)" }} className="font-mono text-sm">~/</span>
+          <span className="font-mono font-bold text-base tracking-tight" style={{ color: "var(--fg)" }}>
+            re:producer
+          </span>
         </Link>
-        <span className="text-xs text-gray-400">reproducibility scores for CS papers</span>
+        <span className="font-mono text-xs" style={{ color: "var(--fg-dim)" }}>
+          reproducibility scores for cs papers
+        </span>
       </div>
     </nav>
   );
