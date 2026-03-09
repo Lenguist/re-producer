@@ -71,7 +71,7 @@ async function getPaperAndScore(arxivId: string) {
     }
   }
 
-  if (!paperRow) return { paper: { arxiv_id: arxivId, ...arxivPaper }, score };
+  if (!paperRow) return { paper: { ...arxivPaper, arxiv_id: arxivId }, score };
 
   // Cache the score
   await db.from("repro_scores").upsert(
